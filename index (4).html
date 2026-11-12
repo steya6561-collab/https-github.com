@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>圆桶刀版 3D 预览工具</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23d9542e'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+/* ============ 基础变量与重置 ============ */
+:root{
+  --ink:#1f2937; --ink-2:#4b5563; --ink-3:#8a93a3;
+  --line:#d9dde4; --line-2:#e7eaef;
+  --bg:#eceef2; --card:#ffffff;
+  --accent:#d9542e; --accent-soft:#fbe9e2;
+  --dark:#27303f; --dark-2:#3a4658;
+  --radius:10px; --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px rgba(16,24,40,.06);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+  color:var(--ink); background:var(--bg); font-size:14px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input[type=file]{display:none}
+.mono{font-family:var(--mono)}
+
+/* ============ 顶栏 ============ */
+.topbar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:12px 20px;background:var(--card);border-bottom:1px solid var(--line);
+  position:sticky;top:0;z-index:30;
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.brand .logo{width:28px;height:28px;border-radius:7px;background:var(--accent);display:grid;place-items:center}
+.brand .logo svg{width:18px;height:18px}
+.brand small{display:block;font-size:11px;font-weight:500;color:var(--ink-3);letter-spacing:.02em}
+.topbar .spacer{flex:1}
+.field-inline{display:flex;align-items:center;gap:8px}
+.field-inline label{color:var(--ink-2);font-size:13px}
+select{
+  font-family:inherit;font-size:13px;color:var(--ink);padding:7px 10px;
+  border:1px solid var(--line);border-radius:8px;background:#fff;min-width:132px;
+}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;
+  font-size:13px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);
+  transition:background .15s,border-color .15s,transform .05s;
+}
+.btn:hover{background:#f6f7f9}
+.btn:active{transform:translateY(1px)}
+.btn svg{width:15px;height:15px}
+.btn.primary{background:var(--dark);border-color:var(--dark);color:#fff}
+.btn.primary:hover{background:var(--dark-2)}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.accent:hover{filter:brightness(1.06)}
+
+/* ============ 布局 ============ */
+.app{padding:18px 20px 30px;max-width:1680px;margin:0 auto}
+.layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px}
+.panel-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;min-width:0}
+.card-head{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line-2);
+}
+.card-head h2{font-size:14px;font-weight:700}
+.card-head .tag{font-size:11px;font-family:var(--mono);color:var(--ink-3);background:#f3f4f7;padding:2px 7px;border-radius:20px}
+.card-head .spacer{flex:1}
+.hint{font-size:12px;color:var(--ink-3)}
+
+/* ============ 2D 刀版 ============ */
+#dieline-wrap{padding:18px;overflow:auto;background:
+  repeating-linear-gradient(0deg,transparent,transparent 23px,#f4f6f9 23px,#f4f6f9 24px),
+  repeating-linear-gradient(90deg,transparent,transparent 23px,#f4f6f9 23px,#f4f6f9 24px),#fbfcfd;}
+#dieline{width:100%;min-width:640px;height:auto;display:block}
+#dieline text{font-family:var(--mono)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--line-2);font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw-cut{width:22px;height:0;border-top:2px solid var(--ink)}
+.sw-fold{width:22px;height:0;border-top:2px dashed var(--accent)}
+.sw-glue{width:14px;height:14px;background:repeating-linear-gradient(45deg,#c9cdd6 0 3px,#e8eaef 3px 6px);border:1px solid var(--line)}
+
+/* ============ 折叠控制 ============ */
+.fold-controls{padding:14px 16px;border-top:1px solid var(--line-2)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.btn-row .btn{flex:1;justify-content:center;min-width:96px}
+.btn-row .btn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.slider-row{display:flex;align-items:center;gap:12px}
+.slider-row .v{font-family:var(--mono);font-size:12px;color:var(--ink-2);width:42px;text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:4px;background:var(--line);outline:none}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--accent);
+  border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);border:3px solid #fff;cursor:pointer}
+
+/* ============ 3D 视口 ============ */
+#viewport{
+  position:relative;height:470px;overflow:hidden;cursor:grab;
+  background:radial-gradient(120% 90% at 50% 12%,#3d4a5e 0%,#2a3444 52%,#202835 100%);
+  touch-action:none;
+}
+#viewport.dragging{cursor:grabbing}
+#viewport .floor{
+  position:absolute;left:50%;top:62%;width:520px;height:520px;border-radius:50%;
+  transform:translate(-50%,-50%) rotateX(72deg);
+  background:radial-gradient(circle,rgba(0,0,0,.34) 0%,rgba(0,0,0,.12) 42%,transparent 68%);
+  pointer-events:none;
+}
+#rig{position:absolute;left:50%;top:52%;transform-style:preserve-3d;will-change:transform}
+#model{position:absolute;transform-style:preserve-3d;transform:translateY(-9px)}
+.cyl{position:absolute;left:0;top:0;transform-style:preserve-3d}
+.seg{position:absolute;left:0;top:0;transform-style:preserve-3d;will-change:transform}
+.seg .face,.seg .tuck{
+  position:absolute;left:0;overflow:hidden;backface-visibility:hidden;
+  background-color:var(--face-color,#999);
+  border:1px solid rgba(0,0,0,.12);
+}
+.seg .face .img-layer,.seg .tuck .img-layer{position:absolute;top:0;left:0;max-width:none;pointer-events:none}
+.seg .tuck{background-color:var(--tuck-color,#777)}
+.seg .tuck.top{transform-origin:bottom}
+.seg .tuck.bottom{transform-origin:top}
+.endcap{
+  position:absolute;left:0;top:0;border-radius:50%;overflow:hidden;
+  backface-visibility:visible;display:grid;place-items:center;
+  border:1px solid rgba(0,0,0,.18);background-color:var(--cap-color,#888);
+  will-change:transform;
+}
+.endcap img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.endcap .cap-label{font-size:11px;color:rgba(255,255,255,.85);font-weight:700;letter-spacing:.05em;text-align:center;padding:0 8px}
+.view-badge{
+  position:absolute;left:14px;top:12px;font-size:11px;font-family:var(--mono);
+  color:rgba(255,255,255,.62);background:rgba(0,0,0,.25);padding:4px 9px;border-radius:6px;pointer-events:none;
+}
+.view-tools{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;z-index:5}
+.view-tools button{
+  width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;
+  display:grid;place-items:center;backdrop-filter:blur(4px);
+}
+.view-tools button:hover{background:rgba(255,255,255,.22)}
+.view-tools svg{width:16px;height:16px}
+
+/* ============ 上传与全局控制 ============ */
+.upload-wrap{padding:16px}
+.upload-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.upload-card{
+  border:1px solid var(--line);border-radius:var(--radius);padding:13px;min-width:0;
+  display:flex;flex-direction:column;gap:10px;background:#fcfdfe;
+}
+.upload-card .uc-head{display:flex;align-items:center;gap:10px;min-width:0}
+.uc-dot{width:11px;height:11px;border-radius:3px;flex:none}
+.uc-title{font-weight:700;font-size:13px;white-space:nowrap}
+.uc-size{font-family:var(--mono);font-size:11px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uc-head .spacer{flex:1}
+.uc-remove{font-size:12px;color:var(--ink-3);padding:3px 6px;border-radius:6px}
+.uc-remove:hover{color:var(--accent);background:var(--accent-soft)}
+.uc-remove[disabled]{display:none}
+.uc-btn{
+  width:100%;padding:9px;border-radius:8px;border:1px dashed var(--line);background:#fff;
+  font-size:12.5px;color:var(--ink-2);font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.uc-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.uc-btn svg{width:15px;height:15px}
+.uc-thumb{width:100%;height:58px;border-radius:7px;border:1px solid var(--line-2);object-fit:contain;background:
+  repeating-linear-gradient(45deg,#f5f6f8 0 8px,#fff 8px 16px);display:none}
+.upload-card.has-img .uc-thumb{display:block}
+.global-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:14px;padding:13px 14px;border:1px solid var(--line);border-radius:var(--radius);background:#fcfdfe}
+.seg-toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg-toggle button{padding:7px 14px;font-size:12.5px;font-weight:600;color:var(--ink-2);background:#fff}
+.seg-toggle button.active{background:var(--dark);color:#fff}
+.switch{position:relative;display:inline-block;width:40px;height:22px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch .sl{position:absolute;cursor:pointer;inset:0;background:#c2c8d2;border-radius:20px;transition:background .2s}
+.switch .sl:before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch input:checked + .sl{background:var(--accent)}
+.switch input:checked + .sl:before{transform:translateX(18px)}
+.trim-field{display:flex;align-items:center;gap:9px}
+.opacity-field{display:flex;align-items:center;gap:10px;flex:1;min-width:220px}
+.opacity-field input[type=range]{max-width:200px}
+.opacity-field .v{font-family:var(--mono);font-size:12px;color:var(--ink-2);width:40px}
+.note{margin-top:14px;font-size:12px;color:var(--ink-3);line-height:1.7}
+.note b{color:var(--ink-2);font-weight:600}
+
+/* ============ 响应式 ============ */
+@media (max-width:1080px){.layout{grid-template-columns:1fr}}
+@media (max-width:640px){
+  .app{padding:12px}
+  .upload-grid{grid-template-columns:1fr}
+  #viewport{height:400px}
+  .topbar{padding:10px 14px;gap:10px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="2"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" stroke="#fff" stroke-width="1.4"/></svg>
+    </span>
+    <div>圆桶刀版 3D 预览工具<small>DIELINE · CSS 3D · 纯前端</small></div>
+  </div>
+  <span class="spacer"></span>
+  <div class="field-inline">
+    <label for="schemeSel">配色方案</label>
+    <select id="schemeSel">
+      <option value="0">角色款 · 玫红 / 紫</option>
+      <option value="1">数字款 · 黄 / 橙</option>
+      <option value="2">交通款 · 蓝 / 绿</option>
+      <option value="3">蔬果款 · 黄绿 / 浅绿</option>
+    </select>
+  </div>
+  <button class="btn accent" id="exportBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    导出 SVG
+  </button>
+</header>
+
+<main class="app">
+  <div class="layout">
+
+    <!-- ===== 左：2D 刀版 ===== -->
+    <section class="panel-card">
+      <div class="card-head">
+        <h2>2D 刀版展开图</h2>
+        <span class="tag">SVG · 单位 cm</span>
+        <span class="spacer"></span>
+        <span class="hint">结构严格对齐参考图</span>
+      </div>
+      <div id="dieline-wrap"><svg id="dieline" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="legend">
+        <span><i class="sw-cut"></i>裁切线（实线）</span>
+        <span><i class="sw-fold"></i>折线（虚线）</span>
+        <span><i class="sw-glue"></i>糊口 / 盖舌</span>
+      </div>
+      <div class="fold-controls">
+        <div class="btn-row">
+          <button class="btn" data-fold="0">展开</button>
+          <button class="btn" data-fold="0.5">半折</button>
+          <button class="btn" data-fold="1">合盒</button>
+        </div>
+        <div class="slider-row">
+          <span class="hint">折叠进度</span>
+          <input type="range" id="foldSlider" min="0" max="100" value="0">
+          <span class="v" id="foldVal">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 右：3D 预览 ===== -->
+    <section class="panel-card">
+      <div class="card-head">
+        <h2>3D 合盒预览</h2>
+        <span class="tag">CSS 3D transform</span>
+        <span class="spacer"></span>
+        <span class="hint">拖动旋转 · 滚轮缩放</span>
+      </div>
+      <div id="viewport">
+        <div class="floor"></div>
+        <span class="view-badge" id="viewBadge">展开 · 0%</span>
+        <div id="rig"><div id="model"></div></div>
+        <div class="view-tools">
+          <button id="zoomIn" title="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6M20 20l-3.5-3.5"/></svg></button>
+          <button id="zoomOut" title="缩小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M20 20l-3.5-3.5"/></svg></button>
+          <button id="resetView" title="复位视角"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+          <button id="exportView" title="导出当前视角 PNG"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        </div>
+      </div>
+      <div class="upload-wrap">
+        <div class="upload-grid" id="uploadGrid"></div>
+        <div class="global-row">
+          <div class="field-inline">
+            <span class="hint">图片显示</span>
+            <div class="seg-toggle" id="fitToggle">
+              <button data-fit="cover" class="active">铺满 cover</button>
+              <button data-fit="contain">完整 contain</button>
+            </div>
+          </div>
+          <div class="opacity-field">
+            <span class="hint">图片透明度</span>
+            <input type="range" id="opacitySlider" min="0" max="100" value="100">
+            <span class="v" id="opacityVal">100%</span>
+          </div>
+          <div class="trim-field">
+            <label class="switch"><input type="checkbox" id="trimSwitch" checked><span class="sl"></span></label>
+            <span class="hint">自动去除白边</span>
+          </div>
+        </div>
+        <p class="note">
+          <b>结构说明：</b>本参考图为圆柱形纸桶，主体面共 <b>4 个</b>（顶盖 / 底盖 / 上桶身 / 下桶身）。
+          盖舌（1.7cm）与糊口（1.7cm）在 2D 图中标注，3D 合盒时折入 / 搭接，不作为外盒面；小串珠为内容物，非盒体结构。
+        </p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* =========================================================
+   Part A · 配置 / 尺寸常量 / 状态 / 工具
+   ========================================================= */
+
+/* 四款配色，颜色取自参考图（结构底色，不改变刀版结构） */
+const SCHEMES = [
+  { name:'角色款', upper:'#e8386a', upperDark:'#c42c58', lower:'#7b5aa6', lowerDark:'#63478a', lid:'#d23366', base:'#6f4f99' },
+  { name:'数字款', upper:'#ffe27a', upperDark:'#f0cb54', lower:'#f5a400', lowerDark:'#d98e00', lid:'#ffe98a', base:'#ef9f00' },
+  { name:'交通款', upper:'#18b8e6', upperDark:'#0e9fcb', lower:'#58b53a', lowerDark:'#46992b', lid:'#2ab7df', base:'#52ac37' },
+  { name:'蔬果款', upper:'#8cc63f', upperDark:'#73aa2e', lower:'#c7dd4f', lowerDark:'#adc13d', lid:'#7ebf3b', base:'#c1d74b' }
+];
+
+/* 四个独立部件（主体面），尺寸来自参考图标注 */
+const PARTS = [
+  { key:'lid',   name:'顶盖',   size:'直径 11.6 cm',                  cname:'lid'   },
+  { key:'base',  name:'底盖',   size:'直径 11 cm',                    cname:'base'  },
+  { key:'upper', name:'上桶身', size:'35.8 × 6.2 cm 含盖舌/糊口',     cname:'upper' },
+  { key:'lower', name:'下桶身', size:'35 × 7.2 cm 含盖舌/糊口',       cname:'lower' }
+];
+
+/* 2D 绘图比例：1 cm = 12 svg 单位 */
+const P2 = 12;
+/* 3D 比例：1 cm = 18 px */
+const P3 = 18;
+const N = 28;                          /* 圆周面片数（上下桶身相同，保证同半径） */
+const R = (34.1 * P3) / (2 * Math.PI); /* 半径，按上桶身净宽 34.1 为周长 */
+const W = 2 * R * Math.tan(Math.PI / N);/* 每片物理宽 */
+const H_UP = 4.5 * P3;                 /* 上桶身主体高 */
+const H_LO = 5.5 * P3;                 /* 下桶身主体高 */
+const TUCK = 1.7 * P3;                 /* 盖舌高 */
+/* 部件“整画布”逻辑尺寸（含盖舌糊口），用于图片切片映射 */
+const CANVAS = {
+  upper:{ w:35.8*P3, h:6.2*P3 },
+  lower:{ w:35*P3,   h:7.2*P3 }
+};
+
+/* 全局状态 */
+const state = {
+  rawImages:{ lid:null, base:null, upper:null, lower:null },  /* 上传原始图（含白边） */
+  images:{ lid:null, base:null, upper:null, lower:null },      /* 实际显示用图（去白边后） */
+  imgEl:  { lid:null, base:null, upper:null, lower:null },  /* 缓存尺寸对象，用于取自然宽高 */
+  fit:'cover', opacity:1, scheme:0, trim:true,
+  fold:0, targetFold:0
+};
+
+/* 模拟 object-fit：把自然宽高 nW×nH 的图放进 W×H 框，返回渲染矩形 */
+function fitRect(nW, nH, W, H, mode){
+  const s = mode === 'cover' ? Math.max(W/nW, H/nH) : Math.min(W/nW, H/nH);
+  const w = nW*s, h = nH*s;
+  return { w, h, x:(W-w)/2, y:(H-h)/2 };
+}
+function readDataURL(file){
+  return new Promise((res, rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+function loadImage(src){
+  return new Promise((res, rej)=>{
+    const im = new Image();
+    im.onload = ()=>res(im); im.onerror = rej; im.src = src;
+  });
+}
+const S = ()=>SCHEMES[state.scheme];
+const lerp = (a,b,t)=>a+(b-a)*t;
+
+/* =========================================================
+   构建上传面板（4 个独立上传位）
+   ========================================================= */
+const uploadGrid = document.getElementById('uploadGrid');
+uploadGrid.innerHTML = PARTS.map(p=>`
+  <div class="upload-card" data-key="${p.key}">
+    <div class="uc-head">
+      <span class="uc-dot" style="background:var(--dot-${p.key})"></span>
+      <span class="uc-title">${p.name}</span>
+      <span class="uc-size">${p.size}</span>
+      <span class="spacer"></span>
+      <button class="uc-remove" data-remove="${p.key}" disabled>移除</button>
+    </div>
+    <img class="uc-thumb" alt="">
+    <label class="uc-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      上传${p.name}图片
+      <input type="file" accept="image/*" data-upload="${p.key}">
+    </label>
+  </div>`).join('');
+
+/* =========================================================
+   Part B · 2D 刀版 SVG（结构严格对齐参考图）
+   单位：1cm = 12；布局复刻“两圆 + 串珠 + 上桶身 + 下桶身”
+   ========================================================= */
+
+/* 依据底色返回可读文字色 */
+function readable(hex){
+  const n=parseInt(hex.slice(1),16);
+  const r=n>>16&255, g=(n>>8)&255, b=n&255;
+  return (0.299*r+0.587*g+0.114*b)>150 ? '#3a414d' : '#ffffff';
+}
+
+/* 尺寸标注 helper */
+function dimH(x1,x2,y,t){
+  return `<g stroke="#7a838f" stroke-width="1" fill="none">
+    <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"/>
+    <line x1="${x1}" y1="${y-4}" x2="${x1}" y2="${y+4}"/>
+    <line x1="${x2}" y1="${y-4}" x2="${x2}" y2="${y+4}"/></g>
+    <text x="${(x1+x2)/2}" y="${y-5}" fill="#6b7280" font-size="12" text-anchor="middle">${t}</text>`;
+}
+function dimV(y1,y2,x,t){
+  return `<g stroke="#7a838f" stroke-width="1" fill="none">
+    <line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}"/>
+    <line x1="${x-4}" y1="${y1}" x2="${x+4}" y2="${y1}"/>
+    <line x1="${x-4}" y1="${y2}" x2="${x+4}" y2="${y2}"/></g>
+    <text x="${x+6}" y="${(y1+y2)/2+4}" fill="#6b7280" font-size="11.5">${t}</text>`;
+}
+
+/* 图片标签（cover→slice / contain→meet） */
+function imgTag(key,x,y,w,h,extra){
+  if(!state.images[key]) return '';
+  return `<image href="${state.images[key]}" x="${x}" y="${y}" width="${w}" height="${h}"
+    preserveAspectRatio="xMidYMid ${state.fit==='cover'?'slice':'meet'}"
+    opacity="${state.opacity}" ${extra||''}/>`;
+}
+/* 未上传时的占位文字 */
+function phText(x,y,w,h,bg,title,sub){
+  const c=readable(bg);
+  return `<text x="${x+w/2}" y="${y+h/2-2}" text-anchor="middle" font-size="13.5" font-weight="700" fill="${c}">${title}</text>
+    <text x="${x+w/2}" y="${y+h/2+15}" text-anchor="middle" font-size="10.5" fill="${c}" opacity=".82" font-family="ui-monospace,monospace">${sub}</text>`;
+}
+
+function buildDieline(){
+  const sc=S();
+  /* ---- 几何参数 ---- */
+  const rL=11.6/2*P2, rB=11/2*P2;
+  const uW=35.8*P2, uH=6.2*P2, uTuck=1.7*P2, uGlue=1.7*P2;
+  const lW=35*P2, lH=7.2*P2, lTuck=1.7*P2, lGlue=1.7*P2;
+  const M=30;
+  const cy=M+rL, cxL=M+rL, cxB=cxL+rL+30+rB;
+  const bx=cxB+rB+30;
+  const rx=M, ry=cy+rL+40;
+  const lx=M, ly=ry+uH+28;
+  /* 折线坐标 */
+  const uFoldY=ry+uTuck, uGlueX=rx+uW-uGlue;
+  const lFoldY=ly+(lH-lTuck), lGlueX=lx+lW-lGlue;
+  const par=state.fit==='cover'?'slice':'meet';
+
+  let h = '';
+  h += `<defs>
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill="rgba(255,255,255,0)"/><line x1="0" y1="0" x2="0" y2="7" stroke="rgba(255,255,255,.55)" stroke-width="2"/>
+    </pattern>
+    <clipPath id="clipLid"><circle cx="${cxL}" cy="${cy}" r="${rL}"/></clipPath>
+    <clipPath id="clipBase"><circle cx="${cxB}" cy="${cy}" r="${rB}"/></clipPath>
+  </defs>`;
+
+  /* ---- 串珠内容物示意（非盒体） ---- */
+  let beads='';
+  const beadCols=['#e85d75','#f2b13f','#5aa7e0','#7bc04b','#b07fd0','#46b8a8','#e07a5f'];
+  for(let r=0;r<3;r++)for(let c=0;c<7;c++){
+    const x=bx+c*26, y=cy-rL+12+r*30;
+    beads+=`<rect x="${x}" y="${y}" width="20" height="22" rx="7" fill="${beadCols[(r*7+c)%7]}" opacity=".78" stroke="rgba(0,0,0,.12)"/>`;
+  }
+  h += beads + `<text x="${bx+78}" y="${cy+rL+6}" text-anchor="middle" font-size="11" fill="#8a93a3">内容物 · 非盒体（1 绳 + 12 木珠）</text>`;
+
+  /* ---- 顶盖圆（11.6） ---- */
+  h += `<circle cx="${cxL}" cy="${cy}" r="${rL}" fill="${sc.lid}" stroke="#2b3340" stroke-width="1.4"/>`;
+  h += imgTag('lid', cxL-rL, cy-rL, rL*2, rL*2, `clip-path="url(#clipLid)"`);
+  if(!state.images.lid) h += phText(cxL-rL,cy-rL,rL*2,rL*2,sc.lid,'顶盖','Ø 11.6 cm');
+  h += `<text x="${cxL}" y="${M-6}" text-anchor="middle" font-size="13" fill="#4b5563">11.6cm</text>`;
+
+  /* ---- 底盖圆（11） ---- */
+  h += `<circle cx="${cxB}" cy="${cy}" r="${rB}" fill="${sc.base}" stroke="#2b3340" stroke-width="1.4"/>`;
+  h += imgTag('base', cxB-rB, cy-rB, rB*2, rB*2, `clip-path="url(#clipBase)"`);
+  if(!state.images.base) h += phText(cxB-rB,cy-rB,rB*2,rB*2,sc.base,'底盖','Ø 11 cm');
+  h += `<text x="${cxB}" y="${M-6}" text-anchor="middle" font-size="13" fill="#4b5563">11cm</text>`;
+
+  /* ---- 上桶身 ---- */
+  h += `<rect x="${rx}" y="${ry}" width="${uW}" height="${uH}" fill="${sc.upper}" stroke="#2b3340" stroke-width="1.4"/>`;
+  h += imgTag('upper', rx, ry, uW, uH);
+  if(!state.images.upper) h += phText(rx,ry,uW,uH,sc.upper,'上桶身 · 主体 4.5cm','35.8 × 6.2（含盖舌/糊口）');
+  /* 盖舌、糊口斜纹叠加 */
+  h += `<rect x="${rx}" y="${ry}" width="${uW-uGlue}" height="${uTuck}" fill="url(#hatch)"/>
+        <rect x="${uGlueX}" y="${ry}" width="${uGlue}" height="${uH}" fill="url(#hatch)"/>`;
+  /* 折线 */
+  h += `<line x1="${rx}" y1="${uFoldY}" x2="${uGlueX}" y2="${uFoldY}" stroke="#d9542e" stroke-width="1.3" stroke-dasharray="6 4"/>
+        <line x1="${uGlueX}" y1="${ry}" x2="${uGlueX}" y2="${ry+uH}" stroke="#d9542e" stroke-width="1.3" stroke-dasharray="6 4"/>`;
+  h += `<text x="${rx+8}" y="${ry+14}" font-size="10.5" font-weight="700" fill="${readable(sc.upper)}">上桶身</text>`;
+
+  /* ---- 下桶身 ---- */
+  h += `<rect x="${lx}" y="${ly}" width="${lW}" height="${lH}" fill="${sc.lower}" stroke="#2b3340" stroke-width="1.4"/>`;
+  h += imgTag('lower', lx, ly, lW, lH);
+  if(!state.images.lower) h += phText(lx,ly,lW,lH,sc.lower,'下桶身 · 主体 5.5cm','35 × 7.2（含盖舌/糊口）');
+  h += `<rect x="${lx}" y="${lFoldY}" width="${lW-lGlue}" height="${lTuck}" fill="url(#hatch)"/>
+        <rect x="${lGlueX}" y="${ly}" width="${lGlue}" height="${lH}" fill="url(#hatch)"/>`;
+  h += `<line x1="${lx}" y1="${lFoldY}" x2="${lGlueX}" y2="${lFoldY}" stroke="#d9542e" stroke-width="1.3" stroke-dasharray="6 4"/>
+        <line x1="${lGlueX}" y1="${ly}" x2="${lGlueX}" y2="${ly+lH}" stroke="#d9542e" stroke-width="1.3" stroke-dasharray="6 4"/>`;
+  h += `<text x="${lx+8}" y="${ly+16}" font-size="10.5" font-weight="700" fill="${readable(sc.lower)}">下桶身</text>`;
+
+  /* ---- 尺寸标注 ---- */
+  h += dimH(rx, rx+uW, ry-12, '35.8');
+  h += dimV(ry, uFoldY, rx-11, '1.7');
+  h += dimV(uFoldY, ry+uH, rx-11, '4.5');
+  h += dimV(ry, uFoldY, rx+uW+11, '1.7');
+  h += dimH(lx, lx+lW, ly+lH+15, '35');
+  h += dimV(ly, lFoldY, lx+lW+11, '5.5');
+  h += dimV(lFoldY, ly+lH, lx+lW+11, '1.7');
+
+  document.getElementById('dieline').setAttribute('viewBox',`0 0 612 ${ly+lH+30}`);
+  document.getElementById('dieline').innerHTML = h;
+}
+
+/* =========================================================
+   Part C · 3D 模型 DOM（28 片 × 上下两段 + 两端盖）
+   ========================================================= */
+const R_LID = R * 11.6/11;   /* 顶盖半径（11.6 略大） */
+const refs = { segUp:[], segLo:[], tuckUp:[], tuckLo:[], faceUp:[], faceLo:[] };
+
+function buildModel(){
+  const model=document.getElementById('model');
+  let up='',lo='';
+  for(let i=0;i<N;i++){
+    up += `<div class="seg">
+        <div class="tuck top" style="left:${-W/2}px;top:${-(H_UP+TUCK)}px;width:${W}px;height:${TUCK}px">
+          <img class="img-layer" alt=""></div>
+        <div class="face" style="left:${-W/2}px;top:${-H_UP}px;width:${W}px;height:${H_UP}px">
+          <img class="img-layer" alt=""></div>
+      </div>`;
+    lo += `<div class="seg">
+        <div class="face" style="left:${-W/2}px;top:0;width:${W}px;height:${H_LO}px">
+          <img class="img-layer" alt=""></div>
+        <div class="tuck bottom" style="left:${-W/2}px;top:${H_LO}px;width:${W}px;height:${TUCK}px">
+          <img class="img-layer" alt=""></div>
+      </div>`;
+  }
+  model.innerHTML = `<div class="cyl">${up}</div><div class="cyl">${lo}</div>
+    <div class="endcap" id="capUp" style="width:${2*R_LID}px;height:${2*R_LID}px;left:${-R_LID}px;top:${-R_LID}px">
+      <img alt=""><span class="cap-label">顶盖 11.6</span></div>
+    <div class="endcap" id="capLo" style="width:${2*R}px;height:${2*R}px;left:${-R}px;top:${-R}px">
+      <img alt=""><span class="cap-label">底盖 11</span></div>`;
+
+  const cyls=model.querySelectorAll('.cyl');
+  const segU=cyls[0].querySelectorAll('.seg');
+  const segL=cyls[1].querySelectorAll('.seg');
+  for(let i=0;i<N;i++){
+    refs.segUp[i]=segU[i]; refs.segLo[i]=segL[i];
+    refs.tuckUp[i]=segU[i].querySelector('.tuck');
+    refs.faceUp[i]=segU[i].querySelector('.face');
+    refs.tuckLo[i]=segL[i].querySelector('.tuck');
+    refs.faceLo[i]=segL[i].querySelector('.face');
+  }
+  refs.capUp=document.getElementById('capUp');
+  refs.capLo=document.getElementById('capLo');
+}
+
+/* 按配色刷新结构底色（盖舌用深色，体现折入结构） */
+function refreshColors(){
+  const sc=S();
+  for(let i=0;i<N;i++){
+    refs.faceUp[i].style.setProperty('--face-color',sc.upper);
+    refs.tuckUp[i].style.setProperty('--tuck-color',sc.upperDark);
+    refs.faceLo[i].style.setProperty('--face-color',sc.lower);
+    refs.tuckLo[i].style.setProperty('--tuck-color',sc.lowerDark);
+  }
+  refs.capUp.style.setProperty('--cap-color',sc.lid);
+  refs.capLo.style.setProperty('--cap-color',sc.base);
+}
+
+/* =========================================================
+   Part D · 把上传图片映射到 3D 面片 / 端盖（各面独立）
+   ========================================================= */
+function styleLayer(el, fit, left, top, src, op){
+  el.style.width=fit.w+'px'; el.style.height=fit.h+'px';
+  el.style.left=left+'px'; el.style.top=top+'px';
+  el.style.opacity=op; el.src=src; el.style.display='block';
+}
+function hideLayer(el){ el.removeAttribute('src'); el.style.display='none'; }
+
+function updateImages3D(){
+  const op=state.opacity;
+  /* ---- 上桶身 ---- */
+  if(state.images.upper){
+    const im=state.imgEl.upper, Wc=CANVAS.upper.w, Hc=CANVAS.upper.h;
+    const f=fitRect(im.naturalWidth,im.naturalHeight,Wc,Hc,state.fit);
+    for(let i=0;i<N;i++){
+      const segX=i*Wc/N;
+      styleLayer(refs.faceUp[i].querySelector('.img-layer'),f,f.x-segX,f.y-TUCK,state.images.upper,op);
+      styleLayer(refs.tuckUp[i].querySelector('.img-layer'),f,f.x-segX,f.y,state.images.upper,op);
+    }
+  }else{
+    for(let i=0;i<N;i++){ hideLayer(refs.faceUp[i].querySelector('.img-layer')); hideLayer(refs.tuckUp[i].querySelector('.img-layer')); }
+  }
+  /* ---- 下桶身 ---- */
+  if(state.images.lower){
+    const im=state.imgEl.lower, Wc=CANVAS.lower.w, Hc=CANVAS.lower.h;
+    const f=fitRect(im.naturalWidth,im.naturalHeight,Wc,Hc,state.fit);
+    for(let i=0;i<N;i++){
+      const segX=i*Wc/N;
+      styleLayer(refs.faceLo[i].querySelector('.img-layer'),f,f.x-segX,f.y,state.images.lower,op);
+      styleLayer(refs.tuckLo[i].querySelector('.img-layer'),f,f.x-segX,f.y-H_LO,state.images.lower,op);
+    }
+  }else{
+    for(let i=0;i<N;i++){ hideLayer(refs.faceLo[i].querySelector('.img-layer')); hideLayer(refs.tuckLo[i].querySelector('.img-layer')); }
+  }
+  /* ---- 端盖 ---- */
+  setCap(refs.capUp, state.images.lid);
+  setCap(refs.capLo, state.images.base);
+}
+function setCap(cap, url){
+  const img=cap.querySelector('img'), label=cap.querySelector('.cap-label');
+  if(url){
+    img.src=url; img.style.objectFit=state.fit; img.style.opacity=state.opacity; img.style.display='block';
+    label.style.display='none';
+  }else{
+    img.removeAttribute('src'); img.style.display='none'; label.style.display='block';
+  }
+}
+
+/* =========================================================
+   Part E · 折叠渲染（面片在平铺与圆周间插值 + 盖舌内折 + 端盖盖合）
+   ========================================================= */
+/* 端盖展开 / 闭合的 y 与角度（本地坐标，接缝 y=0） */
+const CAP_UP_EXP = -(H_UP+TUCK) - 46 - R_LID;
+const CAP_LO_EXP =  (H_LO+TUCK) + 46 + R;
+
+function render(p){
+  for(let i=0;i<N;i++){
+    const a=i*2*Math.PI/N;
+    const flatX=(i-(N-1)/2)*W;
+    const x=lerp(flatX, R*Math.sin(a), p);
+    const z=lerp(0, R*Math.cos(a), p);
+    const theta=a*p*180/Math.PI;
+    const t=`translate3d(${x}px,0,${z}px) rotateY(${theta}deg)`;
+    refs.segUp[i].style.transform=t;
+    refs.segLo[i].style.transform=t;
+    refs.tuckUp[i].style.transform=`rotateX(${90*p}deg)`;
+    refs.tuckLo[i].style.transform=`rotateX(${-90*p}deg)`;
+  }
+  /* 端盖：上方 y 从 CAP_UP_EXP 到 -H_UP，角度 0→-90；下方对称 */
+  const uy=lerp(CAP_UP_EXP,-H_UP,p), ux=lerp(0,-90,p);
+  const ly=lerp(CAP_LO_EXP,H_LO,p), lx=lerp(0,90,p);
+  refs.capUp.style.transform=`translate3d(0,${uy}px,0) rotateX(${ux}deg)`;
+  refs.capLo.style.transform=`translate3d(0,${ly}px,0) rotateX(${lx}deg)`;
+  syncFoldUI(p);
+}
+function syncFoldUI(p){
+  const pct=Math.round(p*100);
+  document.getElementById('foldSlider').value=pct;
+  document.getElementById('foldVal').textContent=pct+'%';
+  const badge=document.getElementById('viewBadge');
+  const stage=p===0?'展开':p===1?'合盒':p===0.5?'半折':'折叠';
+  badge.textContent=`${stage} · ${pct}%`;
+  document.querySelectorAll('[data-fold]').forEach(b=>{
+    b.classList.toggle('active', Math.abs(parseFloat(b.dataset.fold)-p)<0.001);
+  });
+}
+
+/* =========================================================
+   Part F · 折叠动画循环（按钮缓动；滑块直控）
+   ========================================================= */
+let rafId=null;
+function animateTo(v){
+  state.targetFold=v;
+  if(rafId) return;
+  const tick=()=>{
+    const d=state.targetFold-state.fold;
+    if(Math.abs(d)<0.0015){ state.fold=state.targetFold; render(state.fold); rafId=null; return; }
+    state.fold += d*0.14;
+    render(state.fold);
+    rafId=requestAnimationFrame(tick);
+  };
+  rafId=requestAnimationFrame(tick);
+}
+function setFoldDirect(v){
+  state.fold=v; state.targetFold=v;
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+  render(v);
+}
+
+/* =========================================================
+   Part G · 拖拽旋转 / 滚轮缩放 / 视角复位
+   ========================================================= */
+const view={ rotX:-16, rotY:-28, scale:1.55 };
+const rig=document.getElementById('rig');
+document.getElementById('model').style.left='0';
+document.getElementById('model').style.top='0';
+
+function updateRig(){
+  rig.style.transform=`rotateX(${view.rotX}deg) rotateY(${view.rotY}deg) scale(${view.scale})`;
+}
+const vp=document.getElementById('viewport');
+let dragging=false, lastX=0, lastY=0;
+vp.addEventListener('pointerdown',e=>{
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  vp.classList.add('dragging'); vp.setPointerCapture(e.pointerId);
+});
+vp.addEventListener('pointermove',e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  view.rotY += dx*0.36;
+  view.rotX -= dy*0.36;
+  view.rotX=Math.max(-75,Math.min(75,view.rotX));
+  updateRig();
+});
+vp.addEventListener('pointerup',e=>{
+  dragging=false; vp.classList.remove('dragging');
+  try{vp.releasePointerCapture(e.pointerId)}catch(_){}
+});
+vp.addEventListener('pointercancel',()=>{dragging=false;vp.classList.remove('dragging');});
+vp.addEventListener('wheel',e=>{
+  e.preventDefault();
+  view.scale *= e.deltaY<0 ? 1.09 : 0.92;
+  view.scale=Math.max(0.6,Math.min(3,view.scale));
+  updateRig();
+},{passive:false});
+
+function resetView(){ view.rotX=-16; view.rotY=-28; view.scale=1.55; updateRig(); }
+document.getElementById('resetView').addEventListener('click',resetView);
+document.getElementById('exportView').addEventListener('click',exportCurrentView);
+document.getElementById('zoomIn').addEventListener('click',()=>{view.scale=Math.min(3,view.scale*1.15);updateRig();});
+document.getElementById('zoomOut').addEventListener('click',()=>{view.scale=Math.max(0.6,view.scale/1.15);updateRig();});
+
+/* =========================================================
+   Part H · 事件绑定 / 上传 / 导出 / 初始化
+   ========================================================= */
+
+/* 刷新上传卡片：圆点配色、缩略图、移除按钮状态 */
+function refreshChrome(){
+  const sc=S();
+  const dotMap={lid:sc.lid,base:sc.base,upper:sc.upper,lower:sc.lower};
+  document.querySelectorAll('.upload-card').forEach(card=>{
+    const key=card.dataset.key, has=!!state.images[key];
+    card.querySelector('.uc-dot').style.background=dotMap[key];
+    card.classList.toggle('has-img',has);
+    const thumb=card.querySelector('.uc-thumb');
+    if(has) thumb.src=state.images[key]; else thumb.removeAttribute('src');
+    card.querySelector('[data-remove]').disabled=!has;
+  });
+}
+
+/* 检测并裁剪图片四周近白边，返回去边后的 dataURL 与尺寸；无法处理时返回 null */
+async function trimImage(dataURL){
+  const im=await loadImage(dataURL);
+  const c=document.createElement('canvas');
+  c.width=im.naturalWidth; c.height=im.naturalHeight;
+  const cx=c.getContext('2d'); cx.drawImage(im,0,0);
+  let data;
+  try{ data=cx.getImageData(0,0,c.width,c.height).data; }catch(e){ return null; }
+  const TH=248;
+  let minX=c.width,minY=c.height,maxX=-1,maxY=-1;
+  for(let y=0;y<c.height;y++){
+    for(let xx=0;xx<c.width;xx++){
+      const i=(y*c.width+xx)*4;
+      if(!(data[i]>=TH&&data[i+1]>=TH&&data[i+2]>=TH)){
+        if(xx<minX)minX=xx; if(xx>maxX)maxX=xx;
+        if(y<minY)minY=y; if(y>maxY)maxY=y;
+      }
+    }
+  }
+  if(maxX<0) return null;
+  minX=Math.max(0,minX-2); minY=Math.max(0,minY-2);
+  maxX=Math.min(c.width-1,maxX+2); maxY=Math.min(c.height-1,maxY+2);
+  const cw=maxX-minX+1, ch=maxY-minY+1;
+  const out=document.createElement('canvas'); out.width=cw; out.height=ch;
+  out.getContext('2d').drawImage(c,minX,minY,cw,ch,0,0,cw,ch);
+  return { url:out.toDataURL('image/jpeg',0.95), naturalWidth:cw, naturalHeight:ch };
+}
+
+/* 依据 trim 开关，把原始图处理成显示图；imgEl 始终为可绘制的真正 Image */
+async function processPart(key,rawUrl){
+  if(!rawUrl){ state.images[key]=null; state.imgEl[key]=null; return; }
+  let useUrl=rawUrl;
+  if(state.trim){
+    const t=await trimImage(rawUrl);
+    if(t) useUrl=t.url;
+  }
+  const im=await loadImage(useUrl);
+  state.images[key]=useUrl; state.imgEl[key]=im;
+}
+
+async function handleUpload(key,file){
+  if(!file) return;
+  const url=await readDataURL(file);
+  state.rawImages[key]=url;
+  await processPart(key,url);
+  refreshChrome(); buildDieline(); updateImages3D();
+}
+function handleRemove(key){
+  state.rawImages[key]=null; state.images[key]=null; state.imgEl[key]=null;
+  refreshChrome(); buildDieline(); updateImages3D();
+}
+
+/* 上传 / 移除 */
+document.querySelectorAll('[data-upload]').forEach(inp=>{
+  inp.addEventListener('change',e=>handleUpload(inp.dataset.upload,e.target.files[0]));
+});
+document.querySelectorAll('[data-remove]').forEach(btn=>{
+  btn.addEventListener('click',()=>handleRemove(btn.dataset.remove));
+});
+
+/* 铺满 / 完整显示 */
+document.querySelectorAll('#fitToggle button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    state.fit=b.dataset.fit;
+    document.querySelectorAll('#fitToggle button').forEach(x=>x.classList.toggle('active',x===b));
+    buildDieline(); updateImages3D();
+  });
+});
+
+/* 透明度 */
+const opSlider=document.getElementById('opacitySlider');
+opSlider.addEventListener('input',()=>{
+  state.opacity=opSlider.value/100;
+  document.getElementById('opacityVal').textContent=opSlider.value+'%';
+  buildDieline(); updateImages3D();
+});
+
+/* 配色方案 */
+document.getElementById('schemeSel').addEventListener('change',e=>{
+  state.scheme=+e.target.value;
+  refreshColors(); refreshChrome(); buildDieline();
+});
+
+/* 自动去白边开关：切换后重新处理全部已上传图片 */
+document.getElementById('trimSwitch').addEventListener('change',async e=>{
+  state.trim=e.target.checked;
+  for(const key of Object.keys(state.rawImages)){
+    if(state.rawImages[key]) await processPart(key,state.rawImages[key]);
+  }
+  refreshChrome(); buildDieline(); updateImages3D();
+});
+
+/* 折叠按钮 + 滑块 */
+document.querySelectorAll('[data-fold]').forEach(b=>{
+  b.addEventListener('click',()=>animateTo(+b.dataset.fold));
+});
+document.getElementById('foldSlider').addEventListener('input',e=>setFoldDirect(e.target.value/100));
+
+/* 导出 SVG（图片为 dataURL，导出文件自包含可离线查看） */
+function exportSVG(){
+  const svg=document.getElementById('dieline');
+  const clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink','http://www.w3.org/1999/xlink');
+  const xml=new XMLSerializer().serializeToString(clone);
+  const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='圆桶刀版图.svg';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),800);
+}
+document.getElementById('exportBtn').addEventListener('click',exportSVG);
+
+/* =========================================================
+   软件 3D 渲染器 · 按当前视角（rotX/rotY/scale/fold）导出 PNG
+   ========================================================= */
+const RENDER_SPEC={ CW:1500, CH:1180, camD:640, K0:3.3 };
+
+/* seg 几何（与 render 完全一致） */
+function segFrame(i){
+  const a=i*2*Math.PI/N;
+  const flatX=(i-(N-1)/2)*W;
+  return { x:lerp(flatX,R*Math.sin(a),state.fold), z:lerp(0,R*Math.cos(a),state.fold), th:a*state.fold };
+}
+function segLocal(fr,lx,ly,lz){
+  const c=Math.cos(fr.th),s=Math.sin(fr.th);
+  return { x:lx*c+lz*s+fr.x, y:ly, z:-lx*s+lz*c+fr.z };
+}
+/* 世界旋转：先 rotY 再 rotX */
+function toWorld(p){
+  const ry=view.rotY*Math.PI/180, rx=view.rotX*Math.PI/180;
+  const cy=Math.cos(ry),sy=Math.sin(ry),cx=Math.cos(rx),sx=Math.sin(rx);
+  const x=p.x*cy+p.z*sy, y=p.y, z=-p.x*sy+p.z*cy;
+  return { x, y:y*cx-z*sx, z:y*sx+z*cx };
+}
+/* 构建全部多边形：模型角点 pts + 纹理像素 uv + 无图填色 fill */
+function buildPolys(){
+  /* 标准坐标：y 正=上，接缝 y=0；上桶身 y∈[0,H_UP+TUCK]，下桶身 y∈[-H_LO-TUCK,0] */
+  const sc=S(), fold=state.fold, polys=[];
+  const fUp=state.images.upper?fitRect(state.imgEl.upper.naturalWidth,state.imgEl.upper.naturalHeight,CANVAS.upper.w,CANVAS.upper.h,state.fit):null;
+  const fLo=state.images.lower?fitRect(state.imgEl.lower.naturalWidth,state.imgEl.lower.naturalHeight,CANVAS.lower.w,CANVAS.lower.h,state.fit):null;
+  const WcUp=CANVAS.upper.w,HcUp=CANVAS.upper.h,WcLo=CANVAS.lower.w,HcLo=CANVAS.lower.h;
+  /* 画布归一化(Uc,Vc) → 图片像素（经 fit 矩形反算） */
+  const Up=state.imgEl.upper, Lo=state.imgEl.lower;
+  const tUp=(Uc,Vc)=>{
+    const u=(Uc*WcUp-fUp.x)/fUp.w, v=(Vc*HcUp-fUp.y)/fUp.h;
+    return {x:u*Up.naturalWidth,y:v*Up.naturalHeight};
+  };
+  const tLo=(Uc,Vc)=>{
+    const u=(Uc*WcLo-fLo.x)/fLo.w, v=(Vc*HcLo-fLo.y)/fLo.h;
+    return {x:u*Lo.naturalWidth,y:v*Lo.naturalHeight};
+  };
+
+  for(let i=0;i<N;i++){
+    const fr=segFrame(i);
+    const UUp=lx=>(i*WcUp/N+(lx+W/2))/WcUp;
+    const ULo=lx=>(i*WcLo/N+(lx+W/2))/WcLo;
+    /* 上 face：标准 y∈[0,H_UP]，画布 V=(Hc-y)/Hc（接缝处1，折边处 TUCK/Hc） */
+    {
+      const g=[[-W/2,0],[W/2,0],[W/2,H_UP],[-W/2,H_UP]];
+      const pts=g.map(q=>segLocal(fr,q[0],q[1],0));
+      const uv=fUp?g.map(q=>tUp(UUp(q[0]),(HcUp-q[1])/HcUp)):null;
+      polys.push({pts,uv,img:state.imgEl.upper,src:state.images.upper,fill:sc.upper,circle:false});
+    }
+    /* 上 tuck：标准 y∈[H_UP,H_UP+TUCK]，绕 y=H_UP 折向桶内，α=-90*fold */
+    {
+      const al=-90*fold*Math.PI/180,ca=Math.cos(al),sa=Math.sin(al);
+      const g=[[-W/2,H_UP],[W/2,H_UP],[W/2,H_UP+TUCK],[-W/2,H_UP+TUCK]];
+      const pts=g.map(q=>{const dy=q[1]-H_UP;return segLocal(fr,q[0],H_UP+dy*ca,dy*sa);});
+      const uv=fUp?g.map(q=>tUp(UUp(q[0]),(HcUp-q[1])/HcUp)):null;
+      polys.push({pts,uv,img:state.imgEl.upper,src:state.images.upper,fill:sc.upperDark,circle:false});
+    }
+    /* 下 face：标准 y∈[-H_LO,0]，画布 V=-y/Hc（接缝处0，折边处 H_LO/Hc） */
+    {
+      const g=[[-W/2,-H_LO],[W/2,-H_LO],[W/2,0],[-W/2,0]];
+      const pts=g.map(q=>segLocal(fr,q[0],q[1],0));
+      const uv=fLo?g.map(q=>tLo(ULo(q[0]),-q[1]/HcLo)):null;
+      polys.push({pts,uv,img:state.imgEl.lower,src:state.images.lower,fill:sc.lower,circle:false});
+    }
+    /* 下 tuck：标准 y∈[-H_LO-TUCK,-H_LO]，绕 y=-H_LO 折向桶内，α=90*fold */
+    {
+      const al=90*fold*Math.PI/180,ca=Math.cos(al),sa=Math.sin(al);
+      const g=[[-W/2,-H_LO-TUCK],[W/2,-H_LO-TUCK],[W/2,-H_LO],[-W/2,-H_LO]];
+      const pts=g.map(q=>{const dy=q[1]+H_LO;return segLocal(fr,q[0],-H_LO+dy*ca,dy*sa);});
+      const uv=fLo?g.map(q=>tLo(ULo(q[0]),-q[1]/HcLo)):null;
+      polys.push({pts,uv,img:state.imgEl.lower,src:state.images.lower,fill:sc.lowerDark,circle:false});
+    }
+  }
+  /* 端盖（标准）：上 yc 从展开 -CAP_UP_EXP 到合盒 H_UP；下 yc 从 -CAP_LO_EXP 到 -H_LO */
+  function capPoly(isUp){
+    const r=isUp?R_LID:R;
+    const beta=(isUp?-90*fold:90*fold)*Math.PI/180;
+    const yc=isUp?lerp(-CAP_UP_EXP,H_UP,fold):lerp(-CAP_LO_EXP,-H_LO,fold);
+    const g=[[-r,-r],[r,-r],[r,r],[-r,r]];
+    const pts=g.map(q=>({x:q[0],y:yc+q[1]*Math.cos(beta),z:q[1]*Math.sin(beta)}));
+    const src=isUp?state.images.lid:state.images.base, im=isUp?state.imgEl.lid:state.imgEl.base;
+    let uv=null;
+    if(src){
+      const f=fitRect(im.naturalWidth,im.naturalHeight,2*r,2*r,state.fit);
+      uv=g.map(q=>{
+        const Uc=(q[0]+r)/(2*r),Vc=(q[1]+r)/(2*r);
+        const u=(Uc*2*r-f.x)/f.w, v=(Vc*2*r-f.y)/f.h;
+        return {x:u*im.naturalWidth,y:v*im.naturalHeight};
+      });
+    }
+    return {pts,uv,img:im,src,fill:isUp?sc.lid:sc.base,circle:true,r,beta,yc};
+  }
+  polys.push(capPoly(true),capPoly(false));
+  return polys;
+}
+/* 透视投影 */
+function projectPt(w,K){
+  const persp=RENDER_SPEC.camD/(RENDER_SPEC.camD-w.z);
+  return { x:w.x*persp*K+RENDER_SPEC.CW/2, y:-w.y*persp*K+RENDER_SPEC.CH/2 };
+}
+/* 三角形仿射：纹理点 t→屏幕点 s，返回 ctx transform 参数 */
+function triAffine(t0,t1,t2,s0,s1,s2){
+  const ux=t1.x-t0.x,uy=t1.y-t0.y,vx=t2.x-t0.x,vy=t2.y-t0.y;
+  const d1x=s1.x-s0.x,d1y=s1.y-s0.y,d2x=s2.x-s0.x,d2y=s2.y-s0.y;
+  const det=ux*vy-vx*uy;
+  const a=(d1x*vy-d2x*uy)/det, b=(d1y*vy-d2y*uy)/det;
+  const c=(d2x*ux-d1x*vx)/det, d=(d2y*ux-d1y*vx)/det;
+  return [a,b,c,d,s0.x-(a*t0.x+c*t0.y),s0.y-(b*t0.x+d*t0.y)];
+}
+function exportCurrentView(){
+  const canvas=document.createElement('canvas');
+  canvas.width=RENDER_SPEC.CW; canvas.height=RENDER_SPEC.CH;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#242d3b'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  const K=RENDER_SPEC.K0*(view.scale/1.55);
+  const polys=buildPolys();
+  for(const p of polys){
+    p.world=p.pts.map(toWorld);
+    p.screen=p.world.map(w=>projectPt(w,K));
+    p.depth=p.world.reduce((s,w)=>s+w.z,0)/4;
+  }
+  polys.sort((a,b)=>a.depth-b.depth);
+  for(const p of polys){
+    ctx.save(); ctx.beginPath();
+    if(p.circle){
+      for(let k=0;k<=30;k++){
+        const ang=k/30*2*Math.PI, px=Math.cos(ang)*p.r, py=Math.sin(ang)*p.r;
+        const mp={x:px,y:p.yc+py*Math.cos(p.beta),z:py*Math.sin(p.beta)};
+        const s=projectPt(toWorld(mp),K);
+        if(k===0)ctx.moveTo(s.x,s.y);else ctx.lineTo(s.x,s.y);
+      }
+    }else{
+      p.screen.forEach((s,k)=>k===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y));
+    }
+    ctx.closePath(); ctx.clip();
+    if(p.src&&p.uv){
+      for(const t of [[0,1,2],[0,2,3]]){
+        const m=triAffine(p.uv[t[0]],p.uv[t[1]],p.uv[t[2]],p.screen[t[0]],p.screen[t[1]],p.screen[t[2]]);
+        ctx.setTransform(...m); ctx.globalAlpha=state.opacity; ctx.drawImage(p.img,0,0);
+      }
+      ctx.setTransform(1,0,0,1,0,0);
+    }else{
+      ctx.fillStyle=p.fill; ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    ctx.restore();
+  }
+  canvas.toBlob(blob=>{
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='圆桶当前视角.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),800);
+  });
+}
+
+/* ---- 初始化 ---- */
+buildModel();
+refreshColors();
+refreshChrome();
+buildDieline();
+updateImages3D();
+updateRig();
+render(0);
+</script>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->
